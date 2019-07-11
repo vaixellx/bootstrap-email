@@ -11,6 +11,7 @@ module BootstrapEmail
     def initialize mail
       @mail = mail
       @source = mail.html_part || mail
+      @template_caches = {}
       update_doc(@source.body.raw_source)
     end
 
@@ -61,9 +62,14 @@ module BootstrapEmail
 
     def bootstrap_email_head
       engine = defined?(SassC::Engine).nil? ? Sass::Engine : SassC::Engine
+      head_content =
+        File.open(File.expand_path('../core/head.scss', __dir__)) do |f|
+          f.read
+        end
+
       html_string = <<-HEREDOC
         <style type="text/css">
-          #{engine.new(File.open(File.expand_path('../core/head.scss', __dir__)).read, {syntax: :scss, style: :compressed, cache: false, read_cache: false}).render}
+          #{engine.new(head_content, {syntax: :scss, style: :compressed, cache: false, read_cache: false}).render}
         </style>
       HEREDOC
       html_string
@@ -71,7 +77,15 @@ module BootstrapEmail
 
     def template file, locals_hash = {}
       namespace = OpenStruct.new(locals_hash)
-      template_html = File.open(File.expand_path("../core/templates/#{file}.html.erb", __dir__)).read
+      template_html =
+        if @template_caches[file]
+          @template_caches[file]
+        else
+          @template_caches[file] =
+            File.open(File.expand_path("../core/templates/#{file}.html.erb", __dir__)) do |f|
+              f.read
+            end
+        end
       ERB.new(template_html).result(namespace.instance_eval { binding })
     end
 
